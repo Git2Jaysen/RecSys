@@ -1,0 +1,2 @@
+{"Action": 0, "Adventure": 1, "Animation": 2, "Children's": 3, "Comedy": 4, "Crime": 5, "Documentary": 6, "Drama": 7, "Fantasy": 8, "Film-Noir": 9, "Horror": 10, "Musical": 11, "Mystery": 12, "Romance": 13, "Sci-Fi": 14, "Thriller": 15, "War": 16, "Western": 17}
+{"0": "Action", "1": "Adventure", "2": "Animation", "3": "Children's", "4": "Comedy", "5": "Crime", "6": "Documentary", "7": "Drama", "8": "Fantasy", "9": "Film-Noir", "10": "Horror", "11": "Musical", "12": "Mystery", "13": "Romance", "14": "Sci-Fi", "15": "Thriller", "16": "War", "17": "Western"}
