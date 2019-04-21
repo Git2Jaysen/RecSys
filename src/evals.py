@@ -22,6 +22,17 @@ def _compute_NDCG(ranklist, real_item):
     return 0
 
 def evaluate_at_K(preds, K):
+    """Evaluating predictions with HR@K and NDCG@K. This work is copying from
+    https://github.com/hexiangnan/neural_collaborative_filtering/blob/master/
+    evaluate.py.
+
+    Args:
+        preds: generator, predictions.
+        K    : the position need to be evaluated.
+
+    Returns:
+        HR@K and NDCG@K.
+    """
     Hit_Ratio, NDCG, num_samples, scores, count = 0.0, 0.0, 0, {}, 0
     for i, pred in enumerate(preds):
         score[i], count = pred, count + 1
