@@ -38,9 +38,6 @@ params = {
     "embedding_size"        : 32,
 
     # other estimator configs according to special model
-    # NeuMF special configs
-    "hidden_layers"         : 2,   # more than 1, or exception will be raised
-    "hidden_units"          : 128,
 
     # estimator running config
     "num_epochs"            : 2,
@@ -83,7 +80,7 @@ logging.info("defining eval spec.")
 eval_spec = tf.estimator.EvalSpec(
     input_fn = lambda: input_fn(tf.estimator.ModeKeys.EVAL, params),
     hooks    = [early_stopping_hook],
-    throttle_secs = params["eval_interval"])
+    throttle_secs = params["evaluation_interval"])
 
 logging.info("training and evaluating.")
 tf.estimator.train_and_evaluate(

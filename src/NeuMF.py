@@ -99,12 +99,12 @@ def input_fn(mode, params):
     """
     logging.info("generating dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
-        generator = _movielens1m_train_generator
+        generator = _train_generator
     elif mode == tf.estimator.ModeKeys.EVAL:
-        generator = _movielens1m_eval_generator
+        generator = _eval_generator
     else:
-        generator = _movielens1m_pred_generator
-    dataset = tf.data.dataset.from_generator(
+        generator = _pred_generator
+    dataset = tf.data.Dataset.from_generator(
         generator = lambda: generator(params),
         output_types = ((tf.int64, tf.int64), tf.int64))
     logging.info("batching dataset.")
@@ -161,16 +161,16 @@ def model_fn(features, labels, mode, params):
 
     logging.info("defining MLP componet.")
     # shape: [batch_size, 2 * embedding_size]
-    MLP_output = tf.concat(user_emb_inp, item_emb_inp, axis = -1)
-    for i in range(1, params["hidden_layers"]):
-        MLP_output = tf.layers.Dense(
-            units = params["hidden_units"],
-            activation = tf.nn.relu,
-            use_bias = True)(MLP_output)
+    MLP_input = tf.reshape(tf.concat([user_emb_inp, item_emb_inp], axis = -1),
+                                     [-1, 2 * params["embedding_size"]])
+    hidden1   = tf.layers.Dense(units = 128, activation = tf.nn.relu)(MLP_input)
+    hidden2   = tf.layers.Dense(units = 64, activation = tf.nn.relu)(hidden1)
+    MLP_output = tf.layers.Dense(units = 32, activation = tf.nn.relu)(hidden2)
 
     logging.info("defining NeuMF model.")
     # shape: [batch_size, embedding_size + hidden_units]
-    GMF_MLP_concat = tf.concat(GMF_output, MLP_output, axis = -1)
+    GMF_MLP_concat = tf.reshape(tf.concat([GMF_output, MLP_output], axis = -1),
+                                [-1, params["embedding_size"] + 32])
 
     logging.info("defining output layer.")
     # shape: [batch_size, 1]
