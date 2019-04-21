@@ -8,9 +8,86 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-__all__ = ["NeuCF_movielens1m_input_fn", "NeuCF_model_fn"]
+__all__ = ["input_fn", "model_fn"]
 
-def NeuCF_movielens1m_input_fn(mode, params):
+train_file = "movielens1m.trn.98129n.implicit.csv"
+eval_file  = "movielens1m.val.6040n.implicit.csv"
+pred_file  = "movielens1m.prd.355700n.implicit.csv"
+
+def _train_generator(params):
+    """Yielding samples one by one of MovieLens 1M dataset for training, with
+    the following info:
+
+        ((UserID, MovieID), Label).
+
+    Args:
+        params: dict, need "num_neg_samples" key.
+
+    Returns:
+        Samples include the info mentioned above.
+    """
+    logging.info("reading data from data file.")
+    data = pd.read_csv(os.path.join("..", os.path.join("data", train_file)))
+    logging.info("yielding samples with negative sampling.")
+    users = list(set(data["UserID"].values.tolist()))
+    for u in users:
+        logging.debug("computing user data according to user id.")
+        user_pos_data = data[data[data["UserID"] == u]["Label"] == 1]
+        user_neg_data = data[data[data["UserID"] == u]["Label"] == 0]
+        logging.debug("start to sample for user %s." % str(u))
+        for i in user_pos_data.index:
+            logging.debug("yielding a user positive sample for %s." % str(u))
+            yield ((user_pos_data.loc[i, "UserID"],
+                    user_pos_data.loc[i, "MovieID"]),
+                    user_pos_data.loc[i, "Label"])
+            if len(user_neg_data) > 0:
+                user_neg_samples = user_neg_data.sample(
+                    params["num_neg_samples"], replace=True, random_state=42)
+                logging.debug("yielding a negative sample for %s." % str(u))
+                for j in user_neg_samples.index:
+                    yield ((user_neg_samples.loc[j, "UserID"],
+                            user_neg_samples.loc[j, "MovieID"]),
+                            user_neg_samples.loc[j, "Label"])
+
+def _eval_generator(params):
+    """Yielding samples one by one of MovieLens 1M dataset for evaluating, with
+    the following info:
+
+        ((UserID, MovieID), Label).
+
+    Args:
+        params: dict, unsed in this function.
+
+    Returns:
+        Samples include the info mentioned above.
+    """
+    logging.info("reading data from data file.")
+    data = pd.read_csv(os.path.join("..", os.path.join("data", eval_file)))
+    logging.info("yielding evaluation samples.")
+    for i in data.index:
+        yield ((data.loc[i, "UserID"], data.loc[i, "MovieID"]),
+                data.loc[i, "Label"])
+
+def _pred_generator(params):
+    """Yielding samples one by one of MovieLens 1M dataset for predicting, with
+    the following info:
+
+        ((UserID, MovieID), Label).
+
+    Args:
+        params: dict, unsed in this function.
+
+    Returns:
+        Samples include the info mentioned above.
+    """
+    logging.info("reading data from data file.")
+    data = pd.read_csv(os.path.join("..", os.path.join("data", pred_file)))
+    logging.info("yielding samples with other samples.")
+    for i in data.index:
+        yield ((data.loc[i, "UserID"], data.loc[i, "MovieID"]),
+                data.loc[i, "Label"])
+
+def input_fn(mode, params):
     """Building input_fn for tf.estimator.Estimator instances with MovieLens 1M.
 
     Args:
@@ -18,59 +95,28 @@ def NeuCF_movielens1m_input_fn(mode, params):
         params: dict, needed "batch_size" key.
 
     Returns:
-        A tf.data.Dataset instance containing ((user_id, item_id), label) pair.
+        A tf.data.Dataset instance.
     """
-    logging.info("looking for data file.")
-    data_dir = os.path.join("..", "data")
+    logging.info("generating dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
-        data_file = os.path.join(data_dir,
-            "movielens.1m.train.20190408.idx.implicit.csv")
-        logging.debug("data_file: %s" % data_file)
-        logging.info("reading data according to datafile.")
-        data = pd.read_csv(data_file)
-        users, items, labels = (
-            data["UserID"].values, data["MovieID"].values, data["Label"].values)
-        logging.info("generating tf.data.Dataset instance.")
-        features_dataset = tf.data.Dataset.zip((
-            tf.data.Dataset.from_tensor_slices(users.astype(np.int64)),
-            tf.data.Dataset.from_tensor_slices(items.astype(np.int64))))
+        generator = _movielens1m_train_generator
+    elif mode == tf.estimator.ModeKeys.EVAL:
+        generator = _movielens1m_eval_generator
     else:
-        if mode == mode == tf.estimator.ModeKeys.EVAL:
-            data_file = os.path.join(data_dir,
-                "movielens.1m.valid.20190408.idx.implicit.csv")
-        else:
-            data_file = os.path.join(data_dir,
-                "movielens.1m.test.20190408.idx.implicit.csv")
-        logging.debug("data_file: %s" % data_file)
-        logging.info("reading data according to datafile.")
-        data = pd.read_csv(data_file)
-        users, items, labels, samples = (
-            data["UserID"].values, data["MovieID"].values,
-            data["Label"].values , data["Samples"].values)
-        logging.info("generating feature dataset.")
-        features_dataset = tf.data.Dataset.zip((
-            tf.data.Dataset.from_tensor_slices(users.astype(np.int64)),
-            tf.data.Dataset.from_tensor_slices(items.astype(np.int64)),
-            tf.data.Dataset.from_tensor_slices(
-                np.array([sample.split(" ")
-                          for sample in samples]).astype(np.int64))))
-    logging.info("generating label dataset.")
-    labels_dataset = tf.data.Dataset.from_tensor_slices(
-        labels.astype(np.float64))
-    logging.info("merging features and labels.")
-    dataset =  tf.data.Dataset.zip((features_dataset, labels_dataset))
-    logging.info("shuffling, batching, prefetching of dataset.")
+        generator = _movielens1m_pred_generator
+    dataset = tf.data.dataset.from_generator(
+        generator = lambda: generator(params),
+        output_types = ((tf.int64, tf.int64), tf.int64))
+    logging.info("batching dataset.")
     dataset = (
-        dataset.shuffle(256)
-               .batch(batch_size = params["batch_size"]
-                      if mode == tf.estimator.ModeKeys.TRAIN else len(users),
-                      drop_remainder = True)
-               .prefetch(params["batch_size"])
-    )
-    return dataset.repeat() if mode == tf.estimator.ModeKeys.TRAIN else dataset
+        dataset.batch(batch_size = params["batch_size"],
+                      drop_remainder = True))
+    if mode == tf.estimator.ModeKeys.TRAIN:
+        dataset = dataset.shuffle(256).repeat()
+    return dataset
 
-def NeuCF_model_fn(features, labels, mode, params):
-    """Building model_fn for tf.estimator.Estimator instances with NeuCF model.
+def model_fn(features, labels, mode, params):
+    """Building model_fn for tf.estimator.Estimator instances with NeuMF model.
 
     Args:
         features: the first item returned from the input_fn.
@@ -83,13 +129,9 @@ def NeuCF_model_fn(features, labels, mode, params):
     """
     logging.info("parsing features.")
     # shape of labels: [batch_size]
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        # shape of users: [batch_size, 1], denoting user ids
-        # shape of items: [batch_size, 1], denoting item ids
-        users, items = features
-    else:
-        # shape of samples: [batch_size, 100]
-        users, items, samples = features
+    # shape of users: [batch_size, 1], denoting user ids
+    # shape of items: [batch_size, 1], denoting item ids
+    users, items = features
 
     logging.info("defining user and item embedding lookup table.")
     # shape: [num_users, embedding_size]
@@ -118,13 +160,21 @@ def NeuCF_model_fn(features, labels, mode, params):
     GMF_output = user_emb_inp * item_emb_inp
 
     logging.info("defining MLP componet.")
-    MLP_output = None
+    # shape: [batch_size, 2 * embedding_size]
+    MLP_output = tf.concat(user_emb_inp, item_emb_inp, axis = -1)
+    for i in range(1, params["hidden_layers"]):
+        MLP_output = tf.layers.Dense(
+            units = params["hidden_units"],
+            activation = tf.nn.relu,
+            use_bias = True)(MLP_output)
 
-    logging.info("defining NeuCF model.")
-    GMF_MLP_concat = tf.concat(GMF_output, MLP_output)
+    logging.info("defining NeuMF model.")
+    # shape: [batch_size, embedding_size + hidden_units]
+    GMF_MLP_concat = tf.concat(GMF_output, MLP_output, axis = -1)
 
     logging.info("defining output layer.")
-    preds = tf.layers.Dense(
+    # shape: [batch_size, 1]
+    logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
         use_bias = True)(GMF_MLP_concat)
@@ -132,9 +182,7 @@ def NeuCF_model_fn(features, labels, mode, params):
     logging.info("defining loss.")
     if (mode == tf.estimator.ModeKeys.TRAIN or
         mode == tf.estimator.ModeKeys.EVAL):
-        loss = None
-    else:
-        loss = None
+        loss = tf.losses.log_loss(labels = labels, predictions = logits)
 
     logging.info("defining training op.")
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -145,7 +193,7 @@ def NeuCF_model_fn(features, labels, mode, params):
 
     logging.info("defining predictions.")
     if mode == tf.estimator.ModeKeys.PREDICT:
-        predictions = preds
+        predictions = logits
     else:
         predictions = None
 

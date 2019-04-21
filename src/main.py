@@ -3,13 +3,14 @@
 import os
 import sys
 import json
+import evals
 import hooks
 import logging
 import numpy as np
 import tensorflow as tf
 
 # import your model file here, make sure model_fn and input_fn exist
-
+import NeuMF
 
 # libiomp5.dylib config for mac, needed or kernel would be killed
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -21,20 +22,25 @@ logging.basicConfig(format = "[%(levelname)s] - %(filename)s - %(funcName)s " +
 
 logging.info("defining model_fn and input_fn")
 # sepecify your model_fn and input_fn here
-model_fn = None
-input_fn = None
+model_fn = NeuMF.model_fn
+input_fn = NeuMF.input_fn
 
 logging.info("defining running configs.")
 params = {
     # estimator defining config
     "num_train_samples"     : 988129,
-    "num_valid_samples"     : 3536,
-    "num_test_samples"      : 3557,
-    "num_users"             : 6040,
-    "num_items"             : 3706,
+    "num_valid_samples"     : 6040,
+    "num_test_samples"      : 355700,
+    "num_neg_samples"       : 3,
+    "num_users"             : 6041,
+    "num_items"             : 3953,
     "batch_size"            : 32,
     "embedding_size"        : 32,
+
     # other estimator configs according to special model
+    # NeuMF special configs
+    "hidden_layers"         : 2,   # more than 1, or exception will be raised
+    "hidden_units"          : 128,
 
     # estimator running config
     "num_epochs"            : 2,
@@ -57,8 +63,9 @@ run_config = tf.estimator.RunConfig(
 
 logging.info("building train estimator.")
 train_estimator = tf.estimator.Estimator(
-    model_fn  = params["model_fn"],
+    model_fn  = model_fn,
     model_dir = params["model_dir"],
+    params    = params,
     config    = run_config)
 
 logging.info("defining train spec.")
@@ -83,10 +90,18 @@ tf.estimator.train_and_evaluate(
     train_estimator, train_spec, eval_spec)
 
 logging.info("rebuilding test estimator.")
+params["batch_size"] = 100
 test_estimator = tf.estimator.Estimator(
-    model_fn  = lambda: input_fn(tf.estimator.ModeKeys.PREDICT, params),
+    model_fn  = model_fn,
     model_dir = params["model_dir"],
+    params    = params,
     warm_start_from = params["model_dir"])
 
-logging.info("computing metrics.")
-# TODO
+logging.info("predicting.")
+predictions = test_estimator.predict(
+    input_fn = lambda: input_fn(tf.estimator.ModeKeys.PREDICT, params))
+
+logging.info("computing NDCG and HR metrics with K in range(1, 11).")
+for K in range(1, 11):
+    HR, NDCG = evals.evaluate_at_K(predictions, K)
+    print("HR@{}: {}, NDCG@{}: {}\n".format(K, HR, K, NDCG))
