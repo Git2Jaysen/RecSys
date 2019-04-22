@@ -58,13 +58,13 @@ params = {
     "num_genres"            : 20,
 
     # estimator running config
-    "num_epochs"            : 1,
-    "patience"              : 50,
+    "num_epochs"            : 2,
+    "patience"              : 100,
     "monitor_name"          : "log_loss/value",
     "model_dir"             : os.path.join("..", "model"),
     "save_summary_steps"    : 10,
     "save_checkpoints_steps": 10,
-    "evaluation_interval"   : 1,
+    "evaluation_interval"   : 10,
 }
 
 # ========================= training part =========================
@@ -104,7 +104,7 @@ early_stopping_hook = hooks.EarlyStoppingHook(
 logging.info("defining eval spec.")
 eval_spec = tf.estimator.EvalSpec(
     input_fn = lambda: input_fn(tf.estimator.ModeKeys.EVAL, params),
-    hooks    = [early_stopping_hook],
+    # hooks    = [early_stopping_hook],    # early stopping setting
     throttle_secs = params["evaluation_interval"])
 
 logging.info("training and evaluating.")

@@ -188,7 +188,7 @@ def model_fn(features, labels, mode, params):
         activation = tf.nn.sigmoid,
         use_bias = True)(GMF_MLP_concat)
     logging.info("reshaping logits.")
-    logits = tf.reshape(logits, shape = [-1, ])
+    logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 
     logging.info("defining loss.")
     if (mode == tf.estimator.ModeKeys.TRAIN or
