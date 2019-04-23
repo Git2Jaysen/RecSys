@@ -136,9 +136,9 @@ samples = []
 for sample in predictions:
     samples.append(sample)
 
-logging.info("computing NDCG and HR metrics with K in range(1, 11).")
+logging.info("computing NDCG and HR metrics with K in range(1, 51).")
 print("\nStarting to compute metrics...\n")
-for K in range(1, 11):
-    HR, NDCG = evals.evaluate_at_K_logloss(samples, K)
+for K in range(1, 51):
+    HR, NDCG = evals.evaluate_at_K(samples, K)
     print("HR@{}: {},\tNDCG@{}: {}".format(K, HR, K, NDCG))
 print("\n")
