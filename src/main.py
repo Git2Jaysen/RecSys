@@ -55,7 +55,7 @@ params = {
     "num_occupations"       : 22,
     "num_zipcodes"          : 3440,
     "num_years"             : 82,
-    "num_genres"            : 20,
+    "num_genres"            : 18,
 
     # estimator running config
     "num_epochs"            : 2,

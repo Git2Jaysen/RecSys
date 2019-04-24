@@ -8,7 +8,13 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-__all__ = ["input_fn", "model_fn"]
+# encoder Movie Genres to binarize form, i.e. suppose we have 18 genres, then a
+# sample with [1, 2] will be convert to [1, 1, 0, 0, ...]
+from sklearn.preprocessing import MultiLabelBinarizer
+encoder = MultiLabelBinarizer()
+encoder.fit([[i] for i in range(18)])
+
+__all__ = ["input_fn", "model_fn", "_train_generator", "_eval_generator", "_pred_generator"]
 
 # share data with NeuMF
 train_file = "movielens1m.NeuMF.trn.98129n.implicit.csv"
@@ -20,7 +26,7 @@ def _train_generator(params):
     the following info:
 
         ((UserID, MovieID, Gender, Age, Occupation,
-          Zip-code, Year, Genres, Genres_length), Label).
+          Zip-code, Year, Genres(bin)), Label).
 
     Args:
         params: dict, need "num_neg_samples" key.
@@ -48,9 +54,10 @@ def _train_generator(params):
                     user_pos_data.loc[i, "Occupation"],
                     user_pos_data.loc[i, "Zip-code"],
                     user_pos_data.loc[i, "Year"],
-                    user_pos_data.loc[i, "Genres"].split(" "),
-                    len(user_pos_data.loc[i, "Genres"].split(" "))),
-                    user_pos_data.loc[i, "Label"])
+                    encoder.transform(
+                        [[int(i) for i in
+                          user_pos_data.loc[i, "Genres"].split(" ")]]
+                    ).tolist()[0]), 1)
             if len(user_neg_data) > 0:
                 user_neg_samples = user_neg_data.sample(
                     params["num_neg_samples"], replace=True, random_state=42)
@@ -64,16 +71,17 @@ def _train_generator(params):
                             user_neg_samples.loc[j, "Occupation"],
                             user_neg_samples.loc[j, "Zip-code"],
                             user_neg_samples.loc[j, "Year"],
-                            user_neg_samples.loc[j, "Genres"].split(" "),
-                            len(user_neg_samples.loc[j, "Genres"].split(" "))),
-                            user_neg_samples.loc[j, "Label"])
+                            encoder.transform(
+                                [[int(i) for i in
+                                  user_neg_samples.loc[j, "Genres"].split(" ")]]
+                            ).tolist()[0]), 0)
 
 def _eval_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for evaluating, with
     the following info:
 
         ((UserID, MovieID, Gender, Age, Occupation,
-          Zip-code, Year, Genres, Genres_length), Label).
+          Zip-code, Year, Genres(bin)), Label).
 
     Args:
         params: dict, unsed in this function.
@@ -92,8 +100,9 @@ def _eval_generator(params):
                 data.loc[i, "Occupation"],
                 data.loc[i, "Zip-code"],
                 data.loc[i, "Year"],
-                data.loc[i, "Genres"].split(" "),
-                len(data.loc[i, "Genres"].split(" "))),
+                encoder.transform(
+                    [[int(i) for i in data.loc[i, "Genres"].split(" ")]]
+                ).tolist()[0]),
                 data.loc[i, "Label"])
 
 def _pred_generator(params):
@@ -101,7 +110,7 @@ def _pred_generator(params):
     the following info:
 
         ((UserID, MovieID, Gender, Age, Occupation,
-          Zip-code, Year, Genres, Genres_length), Label).
+          Zip-code, Year, Genres(bin)), Label).
 
     Args:
         params: dict, unsed in this function.
@@ -120,8 +129,9 @@ def _pred_generator(params):
                 data.loc[i, "Occupation"],
                 data.loc[i, "Zip-code"],
                 data.loc[i, "Year"],
-                data.loc[i, "Genres"].split(" "),
-                len(data.loc[i, "Genres"].split(" "))),
+                encoder.transform(
+                    [[int(i) for i in data.loc[i, "Genres"].split(" ")]]
+                ).tolist()[0]),
                 data.loc[i, "Label"])
 
 def input_fn(mode, params):
@@ -145,27 +155,14 @@ def input_fn(mode, params):
     dataset = tf.data.Dataset.from_generator(
         generator = lambda: generator(params),
         output_types = ((tf.int64, tf.int64, tf.int64, tf.int64, tf.int64,
-                         tf.int64, tf.int64, tf.int64, tf.int64), tf.int64),
-        output_shapes = (([], [], [], [], [], [], [], [None], []), []))
+                         tf.int64, tf.int64, tf.int64), tf.int64),
+        output_shapes = (([], [], [], [], [], [], [], [None]), []))
     logging.info("batching dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
         dataset = dataset.shuffle(params["batch_size"] * 1000)
     dataset = (
-        dataset.padded_batch(
-            batch_size = params["batch_size"],
-            padded_shapes = (([], [], [], [], [], [], [], [None], []), []),
-            # only using for padding genres, others used
-            padding_values = ((tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(0, dtype=tf.int64), # unused
-                               tf.constant(params["num_genres"], dtype=tf.int64),
-                               tf.constant(0, dtype=tf.int64)), # unused
-                               tf.constant(0, dtype=tf.int64)), # unused
-            drop_remainder = True))
+        dataset.batch(
+            batch_size = params["batch_size"], drop_remainder = True))
     if mode == tf.estimator.ModeKeys.TRAIN:
         dataset = dataset.repeat().prefetch(params["batch_size"])
     return dataset
