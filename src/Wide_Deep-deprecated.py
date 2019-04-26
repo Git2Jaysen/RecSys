@@ -34,13 +34,10 @@ def _train_generator(params):
     logging.info("yielding samples with negative sampling.")
     users = list(set(data["UserID"].values.tolist()))
     for u in users:
-        logging.debug("computing user data according to user id.")
         user_data = data[data["UserID"] == u]
         user_pos_data = user_data[user_data["Label"] == 1]
         user_neg_data = user_data[user_data["Label"] == 0]
-        logging.debug("start to sample for user %s." % str(u))
         for i in user_pos_data.index:
-            logging.debug("yielding a user positive sample for %s." % str(u))
             yield ((user_pos_data.loc[i, "UserID"],
                     user_pos_data.loc[i, "MovieID"],
                     user_pos_data.loc[i, "Gender"],
@@ -49,13 +46,11 @@ def _train_generator(params):
                     user_pos_data.loc[i, "Zip-code"],
                     user_pos_data.loc[i, "Year"],
                     user_pos_data.loc[i, "Genres"].split(" "),
-                    len(user_pos_data.loc[i, "Genres"].split(" "))),
-                    user_pos_data.loc[i, "Label"])
+                    len(user_pos_data.loc[i, "Genres"].split(" "))), 1)
             if len(user_neg_data) > 0:
                 user_neg_samples = user_neg_data.sample(
                     params["num_neg_samples"], replace=True, random_state=42)
                 user_neg_samples.reset_index(inplace=True)
-                logging.debug("yielding negative samples for %s." % str(u))
                 for j in user_neg_samples.index:
                     yield ((user_neg_samples.loc[j, "UserID"],
                             user_neg_samples.loc[j, "MovieID"],
@@ -66,7 +61,7 @@ def _train_generator(params):
                             user_neg_samples.loc[j, "Year"],
                             user_neg_samples.loc[j, "Genres"].split(" "),
                             len(user_neg_samples.loc[j, "Genres"].split(" "))),
-                            user_neg_samples.loc[j, "Label"])
+                            0)
 
 def _eval_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for evaluating, with
@@ -111,7 +106,7 @@ def _pred_generator(params):
     """
     logging.info("reading data from data file.")
     data = pd.read_csv(os.path.join("..", os.path.join("data", pred_file)))
-    logging.info("yielding samples with other samples.")
+    logging.info("yielding prediction samples.")
     for i in data.index:
         yield ((data.loc[i, "UserID"],
                 data.loc[i, "MovieID"],

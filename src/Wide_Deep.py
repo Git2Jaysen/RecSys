@@ -40,13 +40,10 @@ def _train_generator(params):
     logging.info("yielding samples with negative sampling.")
     users = list(set(data["UserID"].values.tolist()))
     for u in users:
-        logging.debug("computing user data according to user id.")
         user_data = data[data["UserID"] == u]
         user_pos_data = user_data[user_data["Label"] == 1]
         user_neg_data = user_data[user_data["Label"] == 0]
-        logging.debug("start to sample for user %s." % str(u))
         for i in user_pos_data.index:
-            logging.debug("yielding a user positive sample for %s." % str(u))
             yield ((user_pos_data.loc[i, "UserID"],
                     user_pos_data.loc[i, "MovieID"],
                     user_pos_data.loc[i, "Gender"],
@@ -62,7 +59,6 @@ def _train_generator(params):
                 user_neg_samples = user_neg_data.sample(
                     params["num_neg_samples"], replace=True, random_state=42)
                 user_neg_samples.reset_index(inplace=True)
-                logging.debug("yielding negative samples for %s." % str(u))
                 for j in user_neg_samples.index:
                     yield ((user_neg_samples.loc[j, "UserID"],
                             user_neg_samples.loc[j, "MovieID"],
@@ -120,7 +116,7 @@ def _pred_generator(params):
     """
     logging.info("reading data from data file.")
     data = pd.read_csv(os.path.join("..", os.path.join("data", pred_file)))
-    logging.info("yielding samples with other samples.")
+    logging.info("yielding prediction samples.")
     for i in data.index:
         yield ((data.loc[i, "UserID"],
                 data.loc[i, "MovieID"],
@@ -155,7 +151,7 @@ def input_fn(mode, params):
     dataset = tf.data.Dataset.from_generator(
         generator = lambda: generator(params),
         output_types = ((tf.int64, tf.int64, tf.int64, tf.int64, tf.int64,
-                         tf.int64, tf.int64, tf.int64), tf.int64),
+                         tf.int64, tf.int64, tf.float64), tf.int64),
         output_shapes = (([], [], [], [], [], [], [], [None]), []))
     logging.info("batching dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -184,7 +180,7 @@ def model_fn(features, labels, mode, params):
     # shape of users: [batch_size, 1], denoting user ids
     # shape of items: [batch_size, 1], denoting item ids
     (users,    items, genders, ages,  occupations,
-     zipcodes, years, genres,  genres_lengths     ) = features
+     zipcodes, years, genres) = features
 
     logging.info("defining user embedding lookup table.")
     # shape: [num_users, embedding_size]
@@ -242,7 +238,7 @@ def model_fn(features, labels, mode, params):
     logging.info("defining genres embedding lookup table.")
     # shape: [num_genres, embedding_size]
     genres_embedding = tf.Variable(
-        tf.truncated_normal([params["num_genres"] + 1,
+        tf.truncated_normal([params["num_genres"],
                              params["embedding_size"]],
                             dtype=tf.float64),
         dtype = tf.float64,
@@ -270,17 +266,12 @@ def model_fn(features, labels, mode, params):
     logging.info("looking up year embedding.")
     # shape: [batch_size, embedding_size]
     year_emb_inp = tf.nn.embedding_lookup(year_embedding, years)
-    # logging.info("looking up genres embedding.")
-    # shape: [batch_size, maxlen * embedding_size]
-    # masking padding values
-    # mask = tf.cast(
-    #     tf.sequence_mask(genres_lengths,
-    #                      maxlen = tf.reduce_max(genres_lengths)),
-    #     dtype = tf.int64)
-    # genres_emb_inp = tf.reshape(
-    #     tf.nn.embedding_lookup(genres_embedding, genres),
-    #     shape = [params["batch_size"], -1])
-    # logging.info("genres_emb_inp shape: {}".format(genres_emb_inp.shape))
+    logging.info("looking up genres embedding.")
+    # shape: [batch_size, num_genres * embedding_size]
+    genres_emb_inp = tf.reshape(
+        tf.reshape(genres,
+                   shape=[params["batch_size"], -1, 1]) * genres_embedding,
+        shape = [params["batch_size"], -1])
 
     logging.info("defining Wide component.")
     # shape: [batch_size, embedding_size]
@@ -296,8 +287,9 @@ def model_fn(features, labels, mode, params):
                    age_emb_inp,
                    occupation_emb_inp,
                    zipcode_emb_inp,
-                   year_emb_inp], axis = -1),
-        shape = [-1, 7 * params["embedding_size"]])
+                   year_emb_inp,
+                   genres_emb_inp], axis = -1),
+        shape = [-1, (7 + params["num_genres"]) * params["embedding_size"]])
     logging.info("Deep_input shape: {}".format(Deep_input.shape))
     hidden1   = tf.layers.Dense(
         units = 2 * 2 * params["num_factors"], activation = tf.nn.relu)(Deep_input)
