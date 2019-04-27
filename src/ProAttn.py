@@ -14,11 +14,12 @@ from sklearn.preprocessing import MultiLabelBinarizer
 encoder = MultiLabelBinarizer()
 encoder.fit([[i] for i in range(18)])
 
-__all__ = ["input_fn", "model_fn", "_train_generator", "_eval_generator", "_pred_generator"]
+__all__ = ["input_fn", "model_fn"]
 
-# share data with NeuMF
-train_file = "movielens1m.pointwise.trn.994169n.implicit.csv"
-eval_file  = "movielens1m.pointwise.val.6040n.implicit.csv"
+train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
 pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
 
 def _train_generator(params):
@@ -159,7 +160,7 @@ def input_fn(mode, params):
         output_shapes = (([], [], [], [], [], [], [], [None]), []))
     logging.info("batching dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(params["batch_size"] * 1000)
+        dataset = dataset.shuffle(params["batch_size"] * 100)
     dataset = (
         dataset.batch(
             batch_size = params["batch_size"], drop_remainder = True))
@@ -183,6 +184,8 @@ def model_fn(features, labels, mode, params):
     # shape of labels: [batch_size]
     # shape of users: [batch_size, 1], denoting user ids
     # shape of items: [batch_size, 1], denoting item ids
+    # ...
+    # shape of genres: [batch_size, num_genres]
     (users,    items, genders, ages,  occupations,
      zipcodes, years, genres) = features
 
@@ -255,70 +258,79 @@ def model_fn(features, labels, mode, params):
     # shape: [batch_size, embedding_size]
     item_emb_inp = tf.nn.embedding_lookup(item_embedding, items)
     logging.info("looking up gender embedding.")
-    # shape: [batch_size, embedding_size]
-    gender_emb_inp = tf.nn.embedding_lookup(gender_embedding, genders)
+    # shape: [batch_size, 1, embedding_size]
+    gender_emb_inp = tf.reshape(
+        tf.nn.embedding_lookup(gender_embedding, genders),
+        shape = [params["batch_size"], -1, params["embedding_size"]])
     logging.info("looking up age embedding.")
-    # shape: [batch_size, embedding_size]
-    age_emb_inp = tf.nn.embedding_lookup(age_embedding, ages)
+    # shape: [batch_size, 1, embedding_size]
+    age_emb_inp = tf.reshape(
+        tf.nn.embedding_lookup(age_embedding, ages),
+        shape = [params["batch_size"], -1, params["embedding_size"]])
     logging.info("looking up occupation embedding.")
-    # shape: [batch_size, embedding_size]
-    occupation_emb_inp = tf.nn.embedding_lookup(occupation_embedding,
-                                                occupations)
+    # shape: [batch_size, 1, embedding_size]
+    occupation_emb_inp = tf.reshape(
+        tf.nn.embedding_lookup(occupation_embedding, occupations),
+        shape = [params["batch_size"], -1, params["embedding_size"]])
     logging.info("looking up zipcode embedding.")
-    # shape: [batch_size, embedding_size]
-    zipcode_emb_inp = tf.nn.embedding_lookup(zipcode_embedding, zipcodes)
+    # shape: [batch_size, 1, embedding_size]
+    zipcode_emb_inp = tf.reshape(
+        tf.nn.embedding_lookup(zipcode_embedding, zipcodes),
+        shape = [params["batch_size"], -1, params["embedding_size"]])
     logging.info("looking up year embedding.")
     # shape: [batch_size, embedding_size]
-    year_emb_inp = tf.nn.embedding_lookup(year_embedding, years)
+    year_emb_inp = tf.reshape(
+        tf.nn.embedding_lookup(year_embedding, years),
+        shape = [params["batch_size"], -1, params["embedding_size"]])
     logging.info("looking up genres embedding.")
-    # shape: [batch_size, num_genres * embedding_size]
+    # shape: [batch_size, num_genres, embedding_size]
     genres_emb_inp = tf.reshape(
-        tf.reshape(genres,
+        tf.reshape(tf.cast(genres, dtype = tf.float64),
                    shape=[params["batch_size"], -1, 1]) * genres_embedding,
+        shape = [params["batch_size"], -1, params["embedding_size"]])
+
+    logging.info("computing truth of user-item record.")
+    # shape: [batch_size, 1, embedding_size]
+    truth = tf.reshape(
+        user_emb_inp * item_emb_inp,
+        shape = [params["batch_size"], -1, params["embedding_size"]])
+
+    logging.info("computing consideration factors.")
+    # shape: [batch_size, 5 + num_genres, embedding_size]
+    considerations = tf.concat([
+        gender_emb_inp,
+        age_emb_inp,
+        occupation_emb_inp,
+        zipcode_emb_inp,
+        year_emb_inp,
+        genres_emb_inp
+    ], axis = 1)
+
+    logging.info("pay attention to considerations using truth.")
+    # shape: [batch_size, 5 + num_genres, 1]
+    scores = tf.nn.softmax(
+        # sum(query * key)
+        tf.reduce_sum(truth * considerations, axis = -1, keepdims = True),
+        axis = 1)
+    # shape: [batch_size, (5 + num_genres) * embedding_size]
+    attn_output = tf.reshape(
+        scores * considerations,
         shape = [params["batch_size"], -1])
 
-    logging.info("computing user-item cross-product.")
-    cross_product = user_emb_inp * item_emb_inp
-
-    logging.info("computing user profiles.")
-    # shape: [batch_size, 4 * embedding_size]
-    user_profiles = tf.concat([gender_emb_inp, age_emb_inp,
-                               occupation_emb_inp, zipcode_emb_inp],
-                               axis = -1)
-    logging.debug("user_profiles shape: {}".format(user_profiles.shape))
-
-    logging.info("computing item profiles")
-    # shape: [batch_size, (1 + num_genres) * embedding_size]
-    item_profiles = tf.concat([year_emb_inp, genres_emb_inp], axis = -1)
-    logging.debug("item_profiles shape: {}".format(item_profiles.shape))
-
-    logging.info("performing profile attention.")
-    # shape: [4 * batch_size, embedding_size]
-    user_profiles_flat = tf.reshape(user_profiles,
-                                    [-1, params["embedding_size"]])
-    logging.debug(
-        "user_profiles_flat shape: {}".format(user_profiles_flat.shape))
-    # shape: [(1 + num_genres) * batch_size, embedding_size]
-    item_profiles_flat = tf.reshape(item_profiles,
-                                    [-1, params["embedding_size"]])
-    logging.debug(
-        "item_profiles_flat shape: {}".format(item_profiles_flat.shape))
-    # shape: [4 * batch_size, (1 + num_genres) * batch_size]
-    user_item_matmul = tf.matmul(user_profiles_flat,
-                                 tf.transpose(item_profiles_flat))
-    logging.debug(
-        "user_item_matmul shape: {}".format(user_item_matmul.shape))
-    # shape: [batch_size, 4, 1 + num_genres]
-    user_item_reshape = tf.reshape(
-        user_item_matmul, [params["batch_size"], 4, -1])
-    logging.debug("user_item_reshape shape: {}".format(user_item_reshape.shape))
+    logging.info("passing attention output to MLP.")
+    hidden1   = tf.layers.Dense(
+        units = 2 * 2 * params["num_factors"], activation = tf.nn.relu)(attn_output)
+    hidden2   = tf.layers.Dense(
+        units = 2 * params["num_factors"], activation = tf.nn.relu)(hidden1)
+    MLP_output = tf.layers.Dense(
+        units = params["num_factors"], activation = tf.nn.relu)(hidden2)
 
     logging.info("defining output layer.")
     # shape: [batch_size, 1]
     logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
-        use_bias = True)(attn_output)
+        use_bias = True)(MLP_output)
     logging.info("reshaping logits.")
     logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 

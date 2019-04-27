@@ -11,7 +11,8 @@ import tensorflow as tf
 
 # import your model file here, make sure model_fn and input_fn exist
 import NeuMF
-import Wide_Deep
+import WideDeep
+import ProAttn
 
 # libiomp5.dylib config for mac, need or kernel would be killed
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -25,8 +26,10 @@ logging.info("defining model_fn and input_fn")
 # sepecify your model_fn and input_fn here
 # model_fn = NeuMF.model_fn
 # input_fn = NeuMF.input_fn
-model_fn = Wide_Deep.model_fn
-input_fn = Wide_Deep.input_fn
+model_fn = WideDeep.model_fn
+input_fn = WideDeep.input_fn
+# model_fn = ProAttn.model_fn
+# input_fn = ProAttn.input_fn
 
 logging.info("defining running configs.")
 params = {
@@ -54,7 +57,7 @@ params = {
 
     # estimator running config
     "num_epochs"            : 4,
-    "patience"              : 4,
+    "patience"              : 3,
     "model_dir"             : os.path.join("..", "model"),
     "save_summary_steps"    : 1,
     "save_checkpoints_steps": 1,
