@@ -18,8 +18,8 @@ __all__ = ["input_fn", "model_fn"]
 
 train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
 # eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
-# eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
-eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
 pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
 
 def _train_generator(params):

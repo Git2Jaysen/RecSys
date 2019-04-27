@@ -18,8 +18,8 @@ __all__ = ["input_fn", "model_fn"]
 
 train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
 # eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
-# eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
-eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
 pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
 
 def _train_generator(params):
@@ -38,7 +38,7 @@ def _train_generator(params):
     logging.info("reading data from data file.")
     data = pd.read_csv(os.path.join("..", os.path.join("data", train_file)))
     logging.debug("data columns: {}".format(" ".join(data.columns)))
-    logging.info("yielding samples with negative sampling.")
+    logging.info("yielding training samples with negative sampling.")
     users = list(set(data["UserID"].values.tolist()))
     for u in users:
         logging.debug("computing user data according to user id.")
@@ -121,7 +121,7 @@ def _pred_generator(params):
     """
     logging.info("reading data from data file.")
     data = pd.read_csv(os.path.join("..", os.path.join("data", pred_file)))
-    logging.info("yielding samples with other samples.")
+    logging.info("yielding prediction samples.")
     for i in data.index:
         yield ((data.loc[i, "UserID"],
                 data.loc[i, "MovieID"],

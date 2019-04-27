@@ -26,10 +26,10 @@ logging.info("defining model_fn and input_fn")
 # sepecify your model_fn and input_fn here
 # model_fn = NeuMF.model_fn
 # input_fn = NeuMF.input_fn
-model_fn = WideDeep.model_fn
-input_fn = WideDeep.input_fn
-# model_fn = ProAttn.model_fn
-# input_fn = ProAttn.input_fn
+# model_fn = WideDeep.model_fn
+# input_fn = WideDeep.input_fn
+model_fn = ProAttn.model_fn
+input_fn = ProAttn.input_fn
 
 logging.info("defining running configs.")
 params = {
@@ -103,13 +103,15 @@ for i in range(total_eval_nums):
         input_fn = lambda: input_fn(tf.estimator.ModeKeys.EVAL, params))
 
     logging.info("evaluating with evaluation samples.")
-    _, NDCG_at_10 = evals.evaluate_at_K(predictions, 10)
-    logging.info("evaluation with NDCG_at_10: {}.".format(NDCG_at_10))
-    # HR_at_10,_ = evals.evaluate_at_K(predictions, 10)
-    # logging.info("evaluation with HR_at_10: {}.".format(HR_at_10))
+    # _, NDCG_at_20 = evals.evaluate_at_K(predictions, 20)
+    # logging.info("evaluation with NDCG_at_20: {}.".format(NDCG_at_20))
+    HR_at_20,_ = evals.evaluate_at_K(predictions, 20)
+    logging.info("evaluation with HR_at_20: {}.".format(HR_at_20))
     logging.info("testing and updating early stopping conditions.")
-    if NDCG_at_10 > best + 0.0001:
-        best, wait = NDCG_at_10, 0
+    # if NDCG_at_20 > best + 0.0001:
+    #     best, wait = NDCG_at_20, 0
+    if HR_at_20 > best + 0.0001:
+        best, wait = HR_at_20, 0
     else:
         wait += 1
         logging.info("early stopping wait: {}".format(wait))
@@ -131,9 +133,9 @@ samples = []
 for sample in predictions:
     samples.append(sample)
 
-logging.info("computing NDCG and HR metrics with K in range(1, 11).")
+logging.info("computing NDCG and HR metrics with K in range(1, 21).")
 print("\nStarting to compute metrics...\n")
-for K in range(1, 11):
+for K in range(1, 21):
     HR, NDCG = evals.evaluate_at_K(samples, K)
-    print("HR@{}: {},\tNDCG@{}: {}".format(K, HR, K, NDCG))
+    print("HR@{}: {},\tNDCG@{}: {}".format(K, round(HR, 5), K, round(NDCG, 5)))
 print("\n")

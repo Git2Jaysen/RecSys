@@ -43,4 +43,4 @@ def evaluate_at_K(preds, K):
             Hit_Ratio += _compute_Hit_Ratio(ranklist, real_item)
             NDCG += _compute_NDCG(ranklist, real_item)
             scores = {}
-    return round(Hit_Ratio / num_samples, 4), round(NDCG / num_samples, 4)
+    return Hit_Ratio / num_samples, NDCG / num_samples
