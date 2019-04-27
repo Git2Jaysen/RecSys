@@ -7,12 +7,17 @@ import logging
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import tensorflow_ranking as tfr
 
 __all__ = ["input_fn", "model_fn"]
 
-train_file = "movielens1m.NeuMF.trn.98129n.implicit.csv"
-eval_file  = "movielens1m.NeuMF.val.6040n.implicit.csv"
-pred_file  = "movielens1m.NeuMF.prd.355700n.implicit.csv"
+train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
+pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
+
+eval_save_file  = "NeuMF.eval.json"
 
 def _train_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for training, with
@@ -29,7 +34,7 @@ def _train_generator(params):
     logging.info("reading data from data file.")
     data = pd.read_csv(os.path.join("..", os.path.join("data", train_file)))
     logging.debug("data columns: {}".format(" ".join(data.columns)))
-    logging.info("yielding samples with negative sampling.")
+    logging.info("yielding training samples with negative sampling.")
     users = list(set(data["UserID"].values.tolist()))
     for u in users:
         user_data = data[data["UserID"] == u]
@@ -37,14 +42,14 @@ def _train_generator(params):
         user_neg_data = user_data[user_data["Label"] == 0]
         for i in user_pos_data.index:
             yield ((user_pos_data.loc[i, "UserID"],
-                    user_pos_data.loc[i, "MovieID"]), 1)
+                       user_pos_data.loc[i, "MovieID"]), 1)
             if len(user_neg_data) > 0:
                 user_neg_samples = user_neg_data.sample(
                     params["num_neg_samples"], replace=True, random_state=42)
                 user_neg_samples.reset_index(inplace=True)
                 for j in user_neg_samples.index:
                     yield ((user_neg_samples.loc[j, "UserID"],
-                            user_neg_samples.loc[j, "MovieID"]), 0)
+                                    user_neg_samples.loc[j, "MovieID"]), 0)
 
 def _eval_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for evaluating, with
@@ -63,7 +68,7 @@ def _eval_generator(params):
     logging.info("yielding evaluation samples.")
     for i in data.index:
         yield ((data.loc[i, "UserID"], data.loc[i, "MovieID"]),
-                data.loc[i, "Label"])
+                   data.loc[i, "Label"])
 
 def _pred_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for predicting, with
@@ -105,13 +110,12 @@ def input_fn(mode, params):
     dataset = tf.data.Dataset.from_generator(
         generator = lambda: generator(params),
         output_types = ((tf.int64, tf.int64), tf.int64))
-    logging.info("batching dataset.")
+    logging.info("shuffing dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(params["batch_size"] * 1000)
+        dataset = dataset.shuffle(params["batch_size"] * 100)
     dataset = (dataset.batch(batch_size = params["batch_size"],
-                             drop_remainder = True))
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.repeat().prefetch(params["batch_size"])
+                             drop_remainder = True)
+                      .prefetch(params["batch_size"]))
     return dataset
 
 def model_fn(features, labels, mode, params):
@@ -182,6 +186,7 @@ def model_fn(features, labels, mode, params):
         activation = tf.nn.sigmoid,
         use_bias = True)(GMF_MLP_concat)
     logging.info("reshaping logits.")
+    # shape: [batch_size, ]
     logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 
     logging.info("defining loss.")

@@ -17,9 +17,9 @@ encoder.fit([[i] for i in range(18)])
 __all__ = ["input_fn", "model_fn", "_train_generator", "_eval_generator", "_pred_generator"]
 
 # share data with NeuMF
-train_file = "movielens1m.NeuMF.trn.98129n.implicit.csv"
-eval_file  = "movielens1m.NeuMF.val.6040n.implicit.csv"
-pred_file  = "movielens1m.NeuMF.prd.355700n.implicit.csv"
+train_file = "movielens1m.pointwise.trn.994169n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.6040n.implicit.csv"
+pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
 
 def _train_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for training, with
