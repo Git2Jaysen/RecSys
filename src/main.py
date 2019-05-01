@@ -24,12 +24,12 @@ logging.basicConfig(format = "[%(levelname)s] - %(filename)s - %(funcName)s " +
 
 logging.info("defining model_fn and input_fn")
 # sepecify your model_fn and input_fn here
-# model_fn = NeuMF.model_fn
-# input_fn = NeuMF.input_fn
+model_fn = NeuMF.model_fn
+input_fn = NeuMF.input_fn
 # model_fn = WideDeep.model_fn
 # input_fn = WideDeep.input_fn
-model_fn = ProAttn.model_fn
-input_fn = ProAttn.input_fn
+# model_fn = ProAttn.model_fn
+# input_fn = ProAttn.input_fn
 
 logging.info("defining running configs.")
 params = {
@@ -56,8 +56,8 @@ params = {
     "SGD_decay_rate"        : 0.96,
 
     # estimator running config
-    "num_epochs"            : 4,
-    "patience"              : 3,
+    "num_epochs"            : 2,
+    "patience"              : 10,
     "model_dir"             : os.path.join("..", "model"),
     "save_summary_steps"    : 1,
     "save_checkpoints_steps": 1,
@@ -79,9 +79,6 @@ logging.info("computing max steps.")
 max_steps = int(params["num_users"] * (1 + params["num_neg_samples"]) /
             params["batch_size"] * params["num_epochs"])
 
-logging.info("computing total_evaluation nums.")
-total_eval_nums = math.ceil(max_steps / params["evaluation_interval"])
-
 logging.info("building train estimator.")
 estimator = tf.estimator.Estimator(
     model_fn  = model_fn,
@@ -89,38 +86,45 @@ estimator = tf.estimator.Estimator(
     params    = params,
     config    = run_config)
 
-logging.info("training and testing every {} steps with early stopping.".format(
-             params["evaluation_interval"]))
-best, wait = 0, 0
-for i in range(total_eval_nums):
-    logging.info("training with {}/{} -th steps.".format(i, total_eval_nums))
-    estimator.train(
-        input_fn  = lambda: input_fn(tf.estimator.ModeKeys.TRAIN, params),
-        steps = params["evaluation_interval"])
+logging.info("training model.")
+estimator.train(
+    input_fn = lambda: input_fn(tf.estimator.ModeKeys.TRAIN, params),
+    max_steps = max_steps)
 
-    logging.info("evaluating with current model parameters.")
-    predictions = estimator.predict(
-        input_fn = lambda: input_fn(tf.estimator.ModeKeys.EVAL, params))
+# logging.info("computing total_evaluation nums.")
+# total_eval_nums = math.ceil(max_steps / params["evaluation_interval"])
 
-    logging.info("evaluating with evaluation samples.")
-    # _, NDCG_at_20 = evals.evaluate_at_K(predictions, 20)
-    # logging.info("evaluation with NDCG_at_20: {}.".format(NDCG_at_20))
-    HR_at_20,_ = evals.evaluate_at_K(predictions, 20)
-    logging.info("evaluation with HR_at_20: {}.".format(HR_at_20))
-    logging.info("testing and updating early stopping conditions.")
-    # if NDCG_at_20 > best + 0.0001:
-    #     best, wait = NDCG_at_20, 0
-    if HR_at_20 > best + 0.0001:
-        best, wait = HR_at_20, 0
-    else:
-        wait += 1
-        logging.info("early stopping wait: {}".format(wait))
-        if wait >= params["patience"]:
-            logging.info("early stopping occured.")
-            break
+# logging.info("training and testing every {} steps with early stopping.".format(
+#              params["evaluation_interval"]))
+# best, wait = 0, 0
+# for i in range(total_eval_nums):
+#     logging.info("training with {}/{} -th steps.".format(i, total_eval_nums))
+#     estimator.train(
+#         input_fn  = lambda: input_fn(tf.estimator.ModeKeys.TRAIN, params),
+#         steps = params["evaluation_interval"])
+#
+#     logging.info("evaluating with current model parameters.")
+#     predictions = estimator.predict(
+#         input_fn = lambda: input_fn(tf.estimator.ModeKeys.EVAL, params))
+#
+#     logging.info("evaluating with evaluation samples.")
+#     # _, NDCG_at_20 = evals.evaluate_at_K(predictions, 20)
+#     # logging.info("evaluation with NDCG_at_20: {}.".format(NDCG_at_20))
+#     HR_at_20,_ = evals.evaluate_at_K(predictions, 20)
+#     logging.info("evaluation with HR_at_20: {}, best: {}.".format(HR_at_20, best))
+#     logging.info("testing and updating early stopping conditions.")
+#     # if NDCG_at_20 > best + 0.0001:
+#     #     best, wait = NDCG_at_20, 0
+#     if HR_at_20 > best + 0.00001:
+#         best, wait = HR_at_20, 0
+#     else:
+#         wait += 1
+#         logging.info("early stopping wait: {}".format(wait))
+#         if wait >= params["patience"]:
+#             logging.info("early stopping occured.")
+#             break
 
 # ========================= testing part =========================
-
 logging.info("predicting with prediction samples.")
 predictions = estimator.predict(
     input_fn = lambda: input_fn(tf.estimator.ModeKeys.PREDICT, params))
@@ -133,9 +137,9 @@ samples = []
 for sample in predictions:
     samples.append(sample)
 
-logging.info("computing NDCG and HR metrics with K in range(1, 21).")
+logging.info("computing NDCG and HR metrics with K in range(1, 51).")
 print("\nStarting to compute metrics...\n")
-for K in range(1, 21):
+for K in range(1, 51):
     HR, NDCG = evals.evaluate_at_K(samples, K)
     print("HR@{}: {},\tNDCG@{}: {}".format(K, round(HR, 5), K, round(NDCG, 5)))
 print("\n")

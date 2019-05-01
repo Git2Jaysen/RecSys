@@ -11,13 +11,12 @@ import tensorflow_ranking as tfr
 
 __all__ = ["input_fn", "model_fn"]
 
-train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
-# eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
-eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
+# train_file = "movielens1m.pointwise.trn.988129n.implicit.csv"
+train_file = "movielens1m.pointwise.trn.994169n.implicit.csv"
+eval_file  = "movielens1m.pointwise.val.353600n.implicit.csv"
+# eval_file  = "movielens1m.pointwise.val.176800n.implicit.csv"
 # eval_file  = "movielens1m.pointwise.val.70720n.implicit.csv"
 pred_file  = "movielens1m.pointwise.prd.355700n.implicit.csv"
-
-eval_save_file  = "NeuMF.eval.json"
 
 def _train_generator(params):
     """Yielding samples one by one of MovieLens 1M dataset for training, with
@@ -112,11 +111,11 @@ def input_fn(mode, params):
         output_types = ((tf.int64, tf.int64), tf.int64))
     logging.info("shuffing dataset.")
     if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(params["batch_size"] * 100)
+        dataset = dataset.shuffle(params["batch_size"] * 1000, seed=2019)
     dataset = (dataset.batch(batch_size = params["batch_size"],
                              drop_remainder = True)
                       .prefetch(params["batch_size"]))
-    return dataset
+    return dataset.repeat() if mode == tf.estimator.ModeKeys.TRAIN else dataset
 
 def model_fn(features, labels, mode, params):
     """Building model_fn for tf.estimator.Estimator instances with NeuMF model.
