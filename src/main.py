@@ -10,11 +10,14 @@ import numpy as np
 import tensorflow as tf
 
 # import your model file here, make sure model_fn and input_fn exist
+import GMF
+import MLP
 import NeuMF
 import WideDeep
 import ProAttn
 
-# libiomp5.dylib config for mac, need or kernel would be killed
+# libiomp5.dylib config for mac in jupyter notebook,
+# need or kernel would be killed
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # logging config, using level to control different log outputs
@@ -24,6 +27,10 @@ logging.basicConfig(format = "[%(levelname)s] - %(filename)s - %(funcName)s " +
 
 logging.info("defining model_fn and input_fn")
 # sepecify your model_fn and input_fn here
+# model_fn = GMF.model_fn
+# input_fn = GMF.input_fn
+# model_fn = MLP.model_fn
+# input_fn = MLP.input_fn
 model_fn = NeuMF.model_fn
 input_fn = NeuMF.input_fn
 # model_fn = WideDeep.model_fn

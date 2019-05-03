@@ -157,10 +157,6 @@ def model_fn(features, labels, mode, params):
     # shape: [batch_size, embedding_size]
     item_emb_inp = tf.nn.embedding_lookup(item_embedding, items)
 
-    logging.info("defining GMF component.")
-    # shape: [batch_size, embedding_size]
-    GMF_output = user_emb_inp * item_emb_inp
-
     logging.info("defining MLP componet.")
     # shape: [batch_size, 2 * embedding_size]
     MLP_input = tf.reshape(tf.concat([user_emb_inp, item_emb_inp], axis = -1),
@@ -172,18 +168,16 @@ def model_fn(features, labels, mode, params):
     MLP_output = tf.layers.Dense(
         units = params["num_factors"], activation = tf.nn.relu)(hidden2)
 
-    logging.info("defining NeuMF model.")
-    # shape: [batch_size, embedding_size + num_factors]
-    GMF_MLP_concat = tf.reshape(
-        tf.concat([GMF_output, MLP_output], axis = -1),
-        shape = [-1, params["embedding_size"] + params["num_factors"]])
+    logging.info("reshaping MLP output.")
+    # a bug of tf, if not doing this, a error will be raised
+    GMF_output = tf.reshape(MLP_output, shape = [-1, params["num_factors"]])
 
     logging.info("defining output layer.")
     # shape: [batch_size, 1]
     logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
-        use_bias = False)(GMF_MLP_concat)
+        use_bias = False)(MLP_output)
 
     logging.info("reshaping logits.")
     # shape: [batch_size, ]

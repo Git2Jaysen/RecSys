@@ -313,7 +313,8 @@ def model_fn(features, labels, mode, params):
     logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
-        use_bias = True)(Wide_Deep_concat)
+        use_bias = False)(Wide_Deep_concat)
+
     logging.info("reshaping logits.")
     logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 

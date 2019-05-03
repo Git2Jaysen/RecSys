@@ -331,7 +331,7 @@ def model_fn(features, labels, mode, params):
     logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
-        use_bias = True)(MLP_output)
+        use_bias = False)(MLP_output)
     logging.info("reshaping logits.")
     logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 
