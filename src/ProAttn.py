@@ -318,20 +318,21 @@ def model_fn(features, labels, mode, params):
         scores * considerations,
         shape = [params["batch_size"], -1])
 
-    logging.info("passing attention output to MLP.")
-    hidden1   = tf.layers.Dense(
-        units = 2 * 2 * params["num_factors"], activation = tf.nn.relu)(attn_output)
-    hidden2   = tf.layers.Dense(
-        units = 2 * params["num_factors"], activation = tf.nn.relu)(hidden1)
-    MLP_output = tf.layers.Dense(
-        units = params["num_factors"], activation = tf.nn.relu)(hidden2)
+    # logging.info("passing attention output to MLP.")
+    # hidden1   = tf.layers.Dense(
+    #     units = 2 * 2 * params["num_factors"], activation = tf.nn.relu)(attn_output)
+    # hidden2   = tf.layers.Dense(
+    #     units = 2 * params["num_factors"], activation = tf.nn.relu)(hidden1)
+    # attn_output = tf.layers.Dense(
+    #     units = params["num_factors"], activation = tf.nn.relu)(hidden2)
 
     logging.info("defining output layer.")
     # shape: [batch_size, 1]
     logits = tf.layers.Dense(
         units = 1,
         activation = tf.nn.sigmoid,
-        use_bias = False)(MLP_output)
+        use_bias = False)(attn_output)
+
     logging.info("reshaping logits.")
     logits = tf.reshape(logits, shape = [-1, ], name = "logits")
 

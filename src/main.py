@@ -87,14 +87,14 @@ max_steps = int(params["num_users"] * (1 + params["num_neg_samples"]) /
             params["batch_size"] * params["num_epochs"])
 
 logging.info("building train estimator.")
-estimator = tf.estimator.Estimator(
+train_estimator = tf.estimator.Estimator(
     model_fn  = model_fn,
     model_dir = params["model_dir"],
     params    = params,
     config    = run_config)
 
 logging.info("training model.")
-estimator.train(
+train_estimator.train(
     input_fn = lambda: input_fn(tf.estimator.ModeKeys.TRAIN, params),
     max_steps = max_steps)
 
@@ -132,8 +132,18 @@ estimator.train(
 #             break
 
 # ========================= testing part =========================
+logging.info("refreshing batch size.")
+params["batch_size"] = 100
+
+logging.info("rebuilding test estimator.")
+test_estimator = tf.estimator.Estimator(
+    model_fn  = model_fn,
+    model_dir = params["model_dir"],
+    params    = params,
+    config    = run_config)
+
 logging.info("predicting with prediction samples.")
-predictions = estimator.predict(
+predictions = test_estimator.predict(
     input_fn = lambda: input_fn(tf.estimator.ModeKeys.PREDICT, params))
 
 logging.info("storing predictions as a list.")
